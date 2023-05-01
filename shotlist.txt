@@ -1,0 +1,32 @@
+{
+  "1": {
+    "shot_type": "WS",
+    "start_frame": 0,
+    "end_frame": 110
+  },
+  "2": {
+    "shot_type": "MS",
+    "start_frame": 110,
+    "end_frame": 176
+  },
+  "3": {
+    "shot_type": "MCU",
+    "start_frame": 176,
+    "end_frame": 264
+  },
+  "4": {
+    "shot_type": "TS",
+    "start_frame": 264,
+    "end_frame": 295
+  },
+  "5": {
+    "shot_type": "CU",
+    "start_frame": 295,
+    "end_frame": 330
+  },
+  "6": {
+    "shot_type": "WS",
+    "start_frame": 330,
+    "end_frame": 405
+  }
+}

@@ -1,2 +1,6 @@
 .env
 __pycache__/
+credsGPT.py
+regexTest.py
+chatgptapi.py
+firstshotlist.txt
