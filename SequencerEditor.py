@@ -91,35 +91,41 @@ def get_shotlist():
         shotlist=json.load(f)
     return shotlist
 
-def generate_shotlist(action_list):
-    openai.api_key = credsGPT.key
-    query = [
-    {'role':'system','content':'you are a film shotlist generator, you will take in an input list of actions and generate a shotlist using any of these shot types: CU,MS,MCU,WS,TS. Make sure the shotlist is numbered starting from 1 and make sure you go all the way to the final end_frame but not beyond. Make sure that the start_frame of a cut is the end_frame of the previous cut, other than the first cut which starts at 0. The shotlist has a range of 2-15 cuts. Return the list in a python dictionary format with double quotations instead of single ones'},
-    {'role':'system','content':'each shot will be in this format: "{\n  \"1\": {\n    \"shot_type\": \"WS\",\n    \"action\": \"actout5_01\",\n    \"start_frame\": 0,\n    \"end_frame\": 110\n},"'},
-    {'role':'system','content':'only return the dictionary'},
-    ]
-    query.append({'role':'user','content':action_list})
-    with unreal.ScopedSlowTask(1,'chatgpt generating shotlist...',enabled=True) as slow:
-        slow.make_dialog(True)
-        slow.enter_progress_frame(work=1,desc='calling chatgpt api')
-        
-        queryResponse = openai.ChatCompletion.create(
-        model='gpt-3.5-turbo',
-        messages=query
-        )
-    reply = queryResponse.choices[0].message.content
+def generate_shotlist(action_list, retries=2):
+    try:
+        openai.api_key = credsGPT.key
+        query = [
+        {'role':'system','content':'you are a film shotlist generator, you will take in an input list of actions and generate a shotlist using any of these shot types: CU,MS,MCU,WS,TS. Make sure the shotlist is numbered starting from 1 and make sure you go all the way to the final end_frame but not beyond. Make sure that the start_frame of a cut is the end_frame of the previous cut, other than the first cut which starts at 0. The shotlist has a range of 2-15 cuts. Return the list in a python dictionary format with double quotations instead of single ones'},
+        {'role':'system','content':'each shot will be in this format: "{\n  \"1\": {\n    \"shot_type\": \"WS\",\n    \"action\": \"actout5_01\",\n    \"start_frame\": 0,\n    \"end_frame\": 110\n},"'},
+        {'role':'system','content':'only return the dictionary'},
+        ]
+        query.append({'role':'user','content':action_list})
+        with unreal.ScopedSlowTask(1,'chatgpt generating shotlist...',enabled=True) as slow:
+            slow.make_dialog(True)
+            slow.enter_progress_frame(work=1,desc='calling chatgpt api')
+            
+            queryResponse = openai.ChatCompletion.create(
+            model='gpt-3.5-turbo',
+            messages=query
+            )
+        reply = queryResponse.choices[0].message.content
 
-    start_pos = reply.index('{')
-    end_pos = reply.rindex('}')
-    dictString = reply[start_pos:end_pos+1]
-    data = json.loads(dictString)
-    print(data)
-    with open('D:\python_unreal\ChatGPTSequencer\shot_list.json','w') as f:
-        json.dump(data,f)
-    with open('D:\python_unreal\ChatGPTSequencer\ReplyFull.txt','w') as f:
-        f.write(str(queryResponse))
-
-    return data
+        start_pos = reply.index('{')
+        end_pos = reply.rindex('}')
+        dictString = reply[start_pos:end_pos+1]
+        data = json.loads(dictString)
+        print(data)
+        with open('D:\python_unreal\ChatGPTSequencer\shot_list.json','w') as f:
+            json.dump(data,f)
+        with open('D:\python_unreal\ChatGPTSequencer\ReplyFull.txt','w') as f:
+            f.write(str(queryResponse))
+        return data
+    
+    except json.JSONDecodeError as e:
+        if retries > 0:
+            generate_shotlist(action_list,retries=retries-1)
+        else:
+            print(f'jsondecodeerror: {e}')
 
 def edit(shotlist,loc,sequencer):
     seq_tracks =sequencer.get_master_tracks()
@@ -211,7 +217,7 @@ def generateVersions(amt):
     for x in range(amt):
         dupe_seq = unreal.EditorAssetLibrary().duplicate_asset(
             source_asset_path='/Game/chatgptSeqs/testforlocationtracking',
-            destination_asset_path=f'/Game/chatgptSeqs/dupes/seq_dupe{x}'
+            destination_asset_path=f'/Game/chatgptSeqs/dupes/toRender/var{x}'
         )
         edit(shotlist,headLoc,dupe_seq)
 
