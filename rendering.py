@@ -1,6 +1,8 @@
 import subprocess
 import os
 import unreal
+import cv2
+import time
 from moviepy.editor import*
 
 def ffmpegSetup(input,output):
@@ -24,7 +26,7 @@ def Render():
             inputPath = fr"{s}/{name}.%04d.png"
         else:
             name='orig'
-            inputPath = fr"{s}/testforlocationtracking.%04d.png"
+            inputPath = fr"{s}/ActionShot.%04d.png"
         outputPath = fr"D:/unreal_projects/pythonThesisGround/Renders/NoLabel/{name}.mp4"
 
         ffmpegSetup(inputPath,outputPath)
@@ -86,7 +88,23 @@ def addLabels():
         movie.close()
         comp.close()
 
+def displayTile():
+    videoDir = 'D:/unreal_projects/pythonThesisGround/Renders/tiled/'
+    tileName = os.listdir(videoDir)[0]
+    if 'tile' in tileName:
+        tileVidPath = os.path.join(videoDir,tileName)
+        cap = cv2.VideoCapture(tileVidPath)
 
+        while(True):
+            ret,frame=cap.read()
+            cv2.imshow('tile-video',frame)
+            time.sleep(.03)
+            if(cv2.waitKey(1) & 0xFF == ord('q')):
+                break
+
+        cap.release()
+        cv2.destroyAllWindows()
+    
 def main():
     funcs=[Render,addLabels,tileVids]
     with unreal.ScopedSlowTask(len(funcs),'converting png seq to mp4') as task:
@@ -101,10 +119,8 @@ def main():
             if i==2:
                 task.enter_progress_frame(1,'creating video grid')
                 x()
-
+    displayTile()
             
-            
-
 
 
 # def testing():

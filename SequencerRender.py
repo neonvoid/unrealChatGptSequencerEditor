@@ -10,7 +10,7 @@ def getSeqVars():
     assetHelpers = unreal.AssetRegistryHelpers().get_asset_registry()
     Sequences =assetHelpers.get_assets_by_path('/Game/chatgptSeqs/dupes/toRender/')
     sequencesToRender=[]
-    sequencesToRender.append(unreal.SoftObjectPath(unreal.EditorAssetLibrary().load_asset('/Game/chatgptSeqs/testforlocationtracking').get_path_name()))
+    sequencesToRender.append(unreal.SoftObjectPath(unreal.EditorAssetLibrary().load_asset('/Game/chatgptSeqs/ActionShot').get_path_name()))
     for s in Sequences:
         loadedAsset = unreal.EditorAssetLibrary().load_asset(f'{s.package_name}')
         assetPathName = loadedAsset.get_path_name()

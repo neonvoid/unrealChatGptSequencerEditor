@@ -6,12 +6,12 @@ import openai
 import os 
 import credsGPT
 
-main_sequencer = unreal.EditorAssetLibrary().load_asset('/Game/chatgptSeqs/testforlocationtracking')
+main_sequencer = unreal.EditorAssetLibrary().load_asset('/Game/chatgptSeqs/ActionShot')
 
-if not unreal.Paths.file_exists('D:/unreal_projects/pythonThesisGround/Content/chatgptSeqs/dupes/seq_dupe.uasset'):
+if not unreal.Paths.file_exists('D:/unreal_projects/pythonThesisGround/Content/chatgptSeqs/dupes/dupe.uasset'):
     dupe_seq = unreal.EditorAssetLibrary().duplicate_asset(
-        source_asset_path='/Game/chatgptSeqs/testforlocationtracking',
-        destination_asset_path='/Game/chatgptSeqs/dupes/seq_dupe'
+        source_asset_path='/Game/chatgptSeqs/ActionShot',
+        destination_asset_path='/Game/chatgptSeqs/dupes/dupe'
     )
 else:
     pass
@@ -20,6 +20,7 @@ seqBindEx = unreal.MovieSceneBindingExtensions()
 seqEx = unreal.MovieSceneSequenceExtensions()
 seq_binds=main_sequencer.get_bindings()
 seq_tracks = main_sequencer.get_master_tracks()
+
 
 all_actors = unreal.EditorLevelLibrary().get_all_level_actors()
 for actor in all_actors:
@@ -43,6 +44,7 @@ controlRigChannels = seqBindEx.get_tracks(body)[1].get_sections()[0].get_channel
 head_loc = []
 lhand_loc = []
 rhand_loc = []
+
 for c in controlRigChannels:
     if 'head_ctrl.Location' in c.get_name():
         head_loc.append(c)
@@ -50,6 +52,7 @@ for c in controlRigChannels:
         lhand_loc.append(c)
     elif 'hand_r_fk_ctrl.Location' in c.get_name():
         rhand_loc.append(c)
+
 
 def get_keyframes(loc):
     framerate = seqEx.get_display_rate(main_sequencer)
@@ -72,18 +75,23 @@ def circleSpawn(shottype):
     theta = random.uniform(0,2*math.pi)
     if shottype == 'CU':
         distance = 100
+        offset = random.randrange(-25,25)
     elif shottype == 'MCU':
         distance = 200
+        offset = random.randrange(-50,50)
     elif shottype == 'MS':
         distance = 500
+        offset = random.randrange(-150,150)
     elif shottype == 'WS':
         distance = 1000
+        offset = random.randrange(-300,300)
     else:
         pass
 
-    x=math.cos(theta)*distance
-    y=math.sin(theta)*distance
-    vector = unreal.Vector(x+random.randrange(-100,100),y+random.randrange(-100,100),random.randrange(100,300))
+    x=math.cos(theta)*distance + offset
+    y=math.sin(theta)*distance + offset
+    vector = unreal.Vector(x,y,random.randrange(400,600))
+    
     return vector
 
 def get_shotlist():
@@ -95,7 +103,7 @@ def generate_shotlist(action_list, retries=2):
     try:
         openai.api_key = credsGPT.key
         query = [
-        {'role':'system','content':'you are a film shotlist generator, you will take in an input list of actions and generate a shotlist using any of these shot types: CU,MS,MCU,WS,TS. Make sure the shotlist is numbered starting from 1 and make sure you go all the way to the final end_frame but not beyond. Make sure that the start_frame of a cut is the end_frame of the previous cut, other than the first cut which starts at 0. The shotlist has a range of 2-15 cuts. Return the list in a python dictionary format with double quotations instead of single ones'},
+        {'role':'system','content':'you are a film shotlist generator, you will take in an input list of actions and generate a shotlist using any of these shot types: CU,MS,MCU,WS,TS. Make sure the shotlist is numbered starting from 1 and make sure you go all the way to the final end_frame but not beyond. Make sure that the start_frame of a cut is the end_frame of the previous cut, the first cut which starts at 0. The shotlist has a range of 3-25 shots. Return the list in a python dictionary format with double quotations instead of single ones'},
         {'role':'system','content':'each shot will be in this format: "{\n  \"1\": {\n    \"shot_type\": \"WS\",\n    \"action\": \"actout5_01\",\n    \"start_frame\": 0,\n    \"end_frame\": 110\n},"'},
         {'role':'system','content':'only return the dictionary'},
         ]
@@ -154,7 +162,7 @@ def edit(shotlist,loc,sequencer):
             seed = random.randint(0,10000)
             random.seed(seed)
             rand_xy_offset= random.randint(100,1000)
-            rand_z_offset = random.randint(0,150)
+            rand_z_offset = random.randint(400,600)
             for x in range(shotlist[f'{i+1}']['start_frame'],shotlist[f'{i+1}']['end_frame']):
                 camLocX.add_key(unreal.FrameNumber(x),loc[0][x] + rand_xy_offset)
                 camLocY.add_key(unreal.FrameNumber(x),loc[1][x] + rand_xy_offset)
@@ -216,7 +224,7 @@ def widgetUpdate(shotlist):
 def generateVersions(amt):
     for x in range(amt):
         dupe_seq = unreal.EditorAssetLibrary().duplicate_asset(
-            source_asset_path='/Game/chatgptSeqs/testforlocationtracking',
+            source_asset_path='/Game/chatgptSeqs/ActionShot',
             destination_asset_path=f'/Game/chatgptSeqs/dupes/toRender/var{x}'
         )
         edit(shotlist,headLoc,dupe_seq)
