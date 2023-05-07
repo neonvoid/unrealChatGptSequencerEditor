@@ -26,7 +26,7 @@ def Render():
             inputPath = fr"{s}/{name}.%04d.png"
         else:
             name='orig'
-            inputPath = fr"{s}/ActionShot.%04d.png"
+            inputPath = fr"{s}/ActionShot2.%04d.png"
         outputPath = fr"D:/unreal_projects/pythonThesisGround/Renders/NoLabel/{name}.mp4"
 
         ffmpegSetup(inputPath,outputPath)

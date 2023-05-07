@@ -6,12 +6,12 @@ import openai
 import os 
 import credsGPT
 
-main_sequencer = unreal.EditorAssetLibrary().load_asset('/Game/chatgptSeqs/ActionShot')
+main_sequencer = unreal.EditorAssetLibrary().load_asset('/Game/chatgptSeqs/ActionShot2')
 
-if not unreal.Paths.file_exists('D:/unreal_projects/pythonThesisGround/Content/chatgptSeqs/dupes/dupe.uasset'):
+if not unreal.Paths.file_exists('D:/unreal_projects/pythonThesisGround/Content/chatgptSeqs/dupes/dupe2.uasset'):
     dupe_seq = unreal.EditorAssetLibrary().duplicate_asset(
-        source_asset_path='/Game/chatgptSeqs/ActionShot',
-        destination_asset_path='/Game/chatgptSeqs/dupes/dupe'
+        source_asset_path='/Game/chatgptSeqs/ActionShot2',
+        destination_asset_path='/Game/chatgptSeqs/dupes/dupe2'
     )
 else:
     pass
@@ -61,8 +61,8 @@ def get_keyframes(loc):
     zRange = loc[2].compute_effective_range()
 
     x = dict(enumerate(loc[0].evaluate_keys(xRange,framerate)))
-    y = dict(enumerate(loc[0].evaluate_keys(yRange,framerate)))
-    z = dict(enumerate(loc[0].evaluate_keys(zRange,framerate)))
+    y = dict(enumerate(loc[1].evaluate_keys(yRange,framerate)))
+    z = dict(enumerate(loc[2].evaluate_keys(zRange,framerate)))
     return x,y,z
 
 def getAnimSections():
@@ -71,39 +71,35 @@ def getAnimSections():
         sections.append(dict(action=s.params.animation.get_name(),action_start=s.get_start_frame(),action_end=s.get_end_frame()))
     return sections
 
-def circleSpawn(shottype):
-    theta = random.uniform(0,2*math.pi)
-    if shottype == 'CU':
-        distance = 100
-        offset = random.randrange(-25,25)
-    elif shottype == 'MCU':
-        distance = 200
-        offset = random.randrange(-50,50)
-    elif shottype == 'MS':
-        distance = 500
-        offset = random.randrange(-150,150)
-    elif shottype == 'WS':
-        distance = 1000
-        offset = random.randrange(-300,300)
-    else:
+def circleSpawn(shottype,center):
+    distances = {'CU':100,'MS':500,'WS':1000,'TS':random.uniform(100,1000)}
+    radius = distances.get(shottype)
+    if radius is None:
         pass
 
-    x=math.cos(theta)*distance + offset
-    y=math.sin(theta)*distance + offset
-    vector = unreal.Vector(x,y,random.randrange(400,600))
+    theta = random.uniform(0,2*math.pi)
+
+    x = center[0] + radius * math.cos(theta)
+    y = center[1] + radius * math.sin(theta) 
+    z = center[2] + random.uniform(-100,150) 
+
+    if shottype == 'TS':
+        return (x,y,z)
     
-    return vector
+    else:
+        vector = unreal.Vector(x,y,z)
+        return vector
 
 def get_shotlist():
     with open('D:\python_unreal\ChatGPTSequencer\query5.json','r') as f:
         shotlist=json.load(f)
     return shotlist
 
-def generate_shotlist(action_list, retries=2):
+def generate_shotlist(action_list):
     try:
         openai.api_key = credsGPT.key
         query = [
-        {'role':'system','content':'you are a film shotlist generator, you will take in an input list of actions and generate a shotlist using any of these shot types: CU,MS,MCU,WS,TS. Make sure the shotlist is numbered starting from 1 and make sure you go all the way to the final end_frame but not beyond. Make sure that the start_frame of a cut is the end_frame of the previous cut, the first cut which starts at 0. The shotlist has a range of 3-25 shots. Return the list in a python dictionary format with double quotations instead of single ones'},
+        {'role':'system','content':'you are a film shotlist generator, you will take in an input list of actions and generate a shotlist using any of these shot types: CU,MS,WS,TS. Make sure the shotlist is numbered starting from 1 and make sure you go all the way to the final end_frame but not beyond. Make sure that the start_frame of a cut is the end_frame of the previous cut, the first cut which starts at 0, no empty gaps between shots. The shotlist has a range of 3-25 shots. Return the list in a python dictionary format with double quotations instead of single ones'},
         {'role':'system','content':'each shot will be in this format: "{\n  \"1\": {\n    \"shot_type\": \"WS\",\n    \"action\": \"actout5_01\",\n    \"start_frame\": 0,\n    \"end_frame\": 110\n},"'},
         {'role':'system','content':'only return the dictionary'},
         ]
@@ -122,7 +118,7 @@ def generate_shotlist(action_list, retries=2):
         end_pos = reply.rindex('}')
         dictString = reply[start_pos:end_pos+1]
         data = json.loads(dictString)
-        print(data)
+        data = parseShotList(data)
         with open('D:\python_unreal\ChatGPTSequencer\shot_list.json','w') as f:
             json.dump(data,f)
         with open('D:\python_unreal\ChatGPTSequencer\ReplyFull.txt','w') as f:
@@ -130,10 +126,7 @@ def generate_shotlist(action_list, retries=2):
         return data
     
     except json.JSONDecodeError as e:
-        if retries > 0:
-            generate_shotlist(action_list,retries=retries-1)
-        else:
-            print(f'jsondecodeerror: {e}')
+        print(f'jsondecodeerror: {e}, try calling again')
 
 def edit(shotlist,loc,sequencer):
     seq_tracks =sequencer.get_master_tracks()
@@ -143,7 +136,13 @@ def edit(shotlist,loc,sequencer):
 
     cam = unreal.CineCameraActor()
     for i in range(len(shotlist)):
+
+        currentpos= shotlist[f'{i+1}']['end_frame']
+        center = (loc[0][currentpos],loc[1][currentpos],loc[2][currentpos])
+        print(center)
+
         if shotlist[f'{i+1}']['shot_type']=='TS': 
+
             cam = unreal.EditorLevelLibrary().spawn_actor_from_object(cam,unreal.Vector(0,0,0),unreal.Rotator(0,0,0),False)
             cam_binding = sequencer.add_possessable(cam)
             cam_binding_id = unreal.MovieSceneObjectBindingID()
@@ -159,17 +158,21 @@ def edit(shotlist,loc,sequencer):
             camLocY = channels[1]
             camLocZ = channels[2]
 
-            seed = random.randint(0,10000)
-            random.seed(seed)
-            rand_xy_offset= random.randint(100,1000)
-            rand_z_offset = random.randint(400,600)
+            # seed = random.randint(0,10000)
+            # random.seed(seed)
+            grabVal=True
+            if (grabVal):
+                offSetVec = circleSpawn('TS',center)
+                grabVal=False
+            # rand_xy_offset= random.randint(-1000,1000)
+            # rand_z_offset = random.randint(-50,300)
             for x in range(shotlist[f'{i+1}']['start_frame'],shotlist[f'{i+1}']['end_frame']):
-                camLocX.add_key(unreal.FrameNumber(x),loc[0][x] + rand_xy_offset)
-                camLocY.add_key(unreal.FrameNumber(x),loc[1][x] + rand_xy_offset)
-                camLocZ.add_key(unreal.FrameNumber(x),loc[2][x] + rand_z_offset)
+                camLocX.add_key(unreal.FrameNumber(x),loc[0][x] + offSetVec[0])
+                camLocY.add_key(unreal.FrameNumber(x),loc[1][x] + offSetVec[1])
+                camLocZ.add_key(unreal.FrameNumber(x),loc[2][x] + offSetVec[2])
 
         else:
-            cam = unreal.EditorLevelLibrary().spawn_actor_from_object(cam,circleSpawn(shotlist[f'{i+1}']['shot_type']),unreal.Rotator(0,0,0),False)
+            cam = unreal.EditorLevelLibrary().spawn_actor_from_object(cam,circleSpawn(shotlist[f'{i+1}']['shot_type'],center),unreal.Rotator(0,0,0),False)
             cam_binding = sequencer.add_possessable(cam)
             cam_binding_id = unreal.MovieSceneObjectBindingID()
             cam_binding_id.set_editor_property('guid',cam_binding.get_id())
@@ -190,12 +193,13 @@ def edit(shotlist,loc,sequencer):
         fb.set_editor_property('sensor_height',7.58)
 
 headx,heady,headz = get_keyframes(head_loc)
-lhandx,lhandy,lhandz = get_keyframes(lhand_loc)
-rhandx,rhandy,rhandz = get_keyframes(rhand_loc)
+#lhandx,lhandy,lhandz = get_keyframes(lhand_loc)
+#rhandx,rhandy,rhandz = get_keyframes(rhand_loc)
 
 headLoc =[headx,heady,headz]
-lHandLoc = [lhandx,lhandy,lhandz]
-rHandLoc = [rhandx,rhandy,rhandz]
+#lHandLoc = [lhandx,lhandy,lhandz]
+#rHandLoc = [rhandx,rhandy,rhandz]
+
 
 def createFirstSeq():
     newAnims = getAnimSections()
@@ -204,6 +208,17 @@ def createFirstSeq():
     edit(shot_list,headLoc,main_sequencer)
     return shot_list
 
+def locTest():
+        currentpos= shotlist[f'{1}']['end_frame']
+        center = (headLoc[0][currentpos],headLoc[1][currentpos],headLoc[2][currentpos])
+        print(center)
+
+def csTest(amt):
+    pos = (headLoc[0][1],headLoc[1][1],headLoc[2][1])
+
+    for x in range(amt):
+        camPos = circleSpawn('CU',pos)
+        unreal.EditorLevelLibrary.spawn_actor_from_object(unreal.CineCameraActor(),camPos,unreal.Rotator(0,0,0),transient=False)
 
 def widgetUpdate(shotlist):
     shot_counts={
@@ -224,11 +239,24 @@ def widgetUpdate(shotlist):
 def generateVersions(amt):
     for x in range(amt):
         dupe_seq = unreal.EditorAssetLibrary().duplicate_asset(
-            source_asset_path='/Game/chatgptSeqs/ActionShot',
+            source_asset_path='/Game/chatgptSeqs/dupes/dupe2',
             destination_asset_path=f'/Game/chatgptSeqs/dupes/toRender/var{x}'
         )
         edit(shotlist,headLoc,dupe_seq)
 
+def parseShotList(data):
+    for i in range(len(data)):
+        if i ==0:
+            data[f'{i+1}']['start_frame'] = 0
+            data[f'{i+1}']['end_frame'] = data[f'{i+2}']['start_frame'] 
+        elif not i == len(data) -1:
+            data[f'{i+2}']['start_frame'] = data[f'{i+1}']['end_frame']
+
+    for key,val in data.items():
+        print(f'startframes: {val["start_frame"]}')
+        print(f'end frames:{val["end_frame"]}')
+
+    return data
 
 shotlist = None
 def main():
