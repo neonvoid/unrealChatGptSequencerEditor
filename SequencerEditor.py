@@ -6,53 +6,78 @@ import openai
 import os 
 import credsGPT
 
-main_sequencer = unreal.EditorAssetLibrary().load_asset('/Game/chatgptSeqs/ActionShot2')
+main_sequencer = unreal.EditorAssetLibrary().load_asset('/Game/anims/2pplconvo/skel2split/2peopleSeq')
 
-if not unreal.Paths.file_exists('D:/unreal_projects/pythonThesisGround/Content/chatgptSeqs/dupes/dupe2.uasset'):
+if not unreal.Paths.file_exists('D:/unreal_projects/pythonThesisGround/Content/chatgptSeqs/dupes/dupe3.uasset'):
     dupe_seq = unreal.EditorAssetLibrary().duplicate_asset(
-        source_asset_path='/Game/chatgptSeqs/ActionShot2',
-        destination_asset_path='/Game/chatgptSeqs/dupes/dupe2'
+        source_asset_path='/Game/anims/2pplconvo/skel2split/2peopleSeq',
+        destination_asset_path='/Game/chatgptSeqs/dupes/dupe3'
     )
 else:
     pass
 
 seqBindEx = unreal.MovieSceneBindingExtensions()
 seqEx = unreal.MovieSceneSequenceExtensions()
+
 seq_binds=main_sequencer.get_bindings()
 seq_tracks = main_sequencer.get_master_tracks()
-
-
-all_actors = unreal.EditorLevelLibrary().get_all_level_actors()
-for actor in all_actors:
-    if 'bp_tracking' in actor.get_name():
-        attach_cube = actor
 
 for t in seq_tracks:
     if t.get_display_name() == 'Camera Cuts':
         cameraCutsTrack = t
 
-for c in seq_binds:
-    # if c.get_display_name()=='CineCameraActor18':
-    #     tmpCam = c
-    if c.get_display_name() == 'Body':
-        body = c
+def setup():
 
-animsChildTracks = seqBindEx.get_tracks(body)[0]
-animsChildSection = animsChildTracks.get_sections()
+    all_actors = unreal.EditorLevelLibrary().get_all_level_actors()
+    for actor in all_actors:
+        if 'bp_tracking_2' in actor.get_name():
+            attach_cube2 = actor
+        elif 'bp_tracking' in actor.get_name():
+            attach_cube = actor
 
-controlRigChannels = seqBindEx.get_tracks(body)[1].get_sections()[0].get_channels()
-head_loc = []
-lhand_loc = []
-rhand_loc = []
 
-for c in controlRigChannels:
-    if 'head_ctrl.Location' in c.get_name():
-        head_loc.append(c)
-    elif 'hand_l_fk_ctrl.Location' in c.get_name():
-        lhand_loc.append(c)
-    elif 'hand_r_fk_ctrl.Location' in c.get_name():
-        rhand_loc.append(c)
+    bodies={}
+    for c in seq_binds:
+        if c.get_display_name()=="Body": 
+            body_dict = {'body_instance':c,'attatch_cube':attach_cube2}
+            bodies['Body'] = body_dict
 
+        elif c.get_display_name()=='KBody':
+            Kbody_dict = {'body_instance':c,'attatch_cube':attach_cube}
+            bodies['KBody'] = Kbody_dict
+
+    for b,value in bodies.items():
+        animsChildTracks = seqBindEx.get_tracks(value['body_instance'])[0]
+        animsChildSection = animsChildTracks.get_sections()
+
+        value['anim_section'] = animsChildSection
+
+        controlRigChannels = seqBindEx.get_tracks(value['body_instance'])[1].get_sections()[0].get_channels()
+        head_loc = []
+        # lhand_loc = []
+        # rhand_loc = []
+
+        for c in controlRigChannels:
+            if 'head_ctrl.Location' in c.get_name():
+                head_loc.append(c)
+
+        # elif 'hand_l_fk_ctrl.Location' in c.get_name():
+        #     lhand_loc.append(c)
+        # elif 'hand_r_fk_ctrl.Location' in c.get_name():
+        #     rhand_loc.append(c)
+        framerate = seqEx.get_display_rate(main_sequencer)
+        xRange = head_loc[0].compute_effective_range()
+        yRange = head_loc[1].compute_effective_range()
+        zRange = head_loc[2].compute_effective_range()
+
+        x = dict(enumerate(head_loc[0].evaluate_keys(xRange,framerate)))
+        y = dict(enumerate(head_loc[1].evaluate_keys(yRange,framerate)))
+        z = dict(enumerate(head_loc[2].evaluate_keys(zRange,framerate)))
+        value['head_loc_x'] = x
+        value['head_loc_y'] = y
+        value['head_loc_z'] = z
+
+    return bodies
 
 def get_keyframes(loc):
     framerate = seqEx.get_display_rate(main_sequencer)
@@ -65,11 +90,50 @@ def get_keyframes(loc):
     z = dict(enumerate(loc[2].evaluate_keys(zRange,framerate)))
     return x,y,z
 
-def getAnimSections():
+def getAnimSections(bodies):
     sections = []
-    for s in animsChildSection:
-        sections.append(dict(action=s.params.animation.get_name(),action_start=s.get_start_frame(),action_end=s.get_end_frame()))
-    return sections
+
+    for key,val in bodies.items():
+        for s in val['anim_section']:
+            anims = dict(actor=val['body_instance'].get_name(), action=s.params.animation.get_name(),action_start=s.get_start_frame(),action_end=s.get_end_frame())
+            sections.append(anims)
+    cleanSecs = cleanupSections(sections)
+    return cleanSecs
+
+def cleanupSections(sections):
+    #start_time_bins = {}
+    cleanedSec = []
+    sections_copy = sections.copy()
+    for i, item1 in enumerate(sections_copy):
+        for j, item2 in enumerate(sections_copy):
+            if i != j:  # don't compare an item to itself
+                for key,value in item1.items():
+                    if abs(item1['action_start'] - item2['action_start'])<10:
+                        choice = random.choice([item1,item2])
+                        if item1 not in cleanedSec and item2 not in cleanedSec:
+                            cleanedSec.append(choice)
+    
+
+    #print(f'item one: {item1}, item two {item2}')
+    # No duplicates found, return False
+
+    #     start_bin_num = start_time // 10
+    #     for bin_num in range(start_bin_num-5,start_bin_num+5):
+    #         if bin_num in start_time_bins:
+    #             for other_item in start_time_bins[bin_num]:
+    #                 if abs(start_time - other_item['action_start']) < 10:
+    #                     # Found a duplicate, randomly choose which one to remove
+    #                     chosen_item = random.choice([item, other_item])
+    #                     print(chosen_item)
+    #                     break
+    #             else:
+    #                 # No duplicate found, add item to bin
+    #                 start_time_bins[bin_num].append(item)
+    #         else:
+    #             # Bin doesn't exist yet, create it and add item
+    #             start_time_bins[bin_num] = [item]
+    # #print(sections)
+    return cleanedSec
 
 def circleSpawn(shottype,center):
     distances = {'CU':100,'MS':500,'WS':1000,'TS':random.uniform(100,1000)}
@@ -100,7 +164,7 @@ def generate_shotlist(action_list):
         openai.api_key = credsGPT.key
         query = [
         {'role':'system','content':'you are a film shotlist generator, you will take in an input list of actions and generate a shotlist using any of these shot types: CU,MS,WS,TS. Make sure the shotlist is numbered starting from 1 and make sure you go all the way to the final end_frame but not beyond. Make sure that the start_frame of a cut is the end_frame of the previous cut, the first cut which starts at 0, no empty gaps between shots. The shotlist has a range of 3-25 shots. Return the list in a python dictionary format with double quotations instead of single ones'},
-        {'role':'system','content':'each shot will be in this format: "{\n  \"1\": {\n    \"shot_type\": \"WS\",\n    \"action\": \"actout5_01\",\n    \"start_frame\": 0,\n    \"end_frame\": 110\n},"'},
+        {'role':'system','content':'each shot will be in this format: "{\n  \"1\": {\n    \"shot_type\": \"WS\",\n    \"actor\": \"Body\",\n    \"action\": \"actout5_01\",\n    \"start_frame\": 0,\n    \"end_frame\": 110\n},"'},
         {'role':'system','content':'only return the dictionary'},
         ]
         query.append({'role':'user','content':action_list})
@@ -113,7 +177,6 @@ def generate_shotlist(action_list):
             messages=query
             )
         reply = queryResponse.choices[0].message.content
-
         start_pos = reply.index('{')
         end_pos = reply.rindex('}')
         dictString = reply[start_pos:end_pos+1]
@@ -128,7 +191,7 @@ def generate_shotlist(action_list):
     except json.JSONDecodeError as e:
         print(f'jsondecodeerror: {e}, try calling again')
 
-def edit(shotlist,loc,sequencer):
+def edit(shotlist,bodies,sequencer):
     seq_tracks =sequencer.get_master_tracks()
     for t in seq_tracks:
         if t.get_display_name() == 'Camera Cuts':
@@ -138,8 +201,8 @@ def edit(shotlist,loc,sequencer):
     for i in range(len(shotlist)):
 
         currentpos= shotlist[f'{i+1}']['end_frame']
-        center = (loc[0][currentpos],loc[1][currentpos],loc[2][currentpos])
-        print(center)
+        currActor = shotlist[f'{i+1}']['actor']
+        center = (bodies[f'{currActor}']['head_loc_x'][currentpos],bodies[f'{currActor}']['head_loc_y'][currentpos],bodies[f'{currActor}']['head_loc_z'][currentpos])
 
         if shotlist[f'{i+1}']['shot_type']=='TS': 
 
@@ -158,18 +221,16 @@ def edit(shotlist,loc,sequencer):
             camLocY = channels[1]
             camLocZ = channels[2]
 
-            # seed = random.randint(0,10000)
-            # random.seed(seed)
+
             grabVal=True
             if (grabVal):
                 offSetVec = circleSpawn('TS',center)
                 grabVal=False
-            # rand_xy_offset= random.randint(-1000,1000)
-            # rand_z_offset = random.randint(-50,300)
+
             for x in range(shotlist[f'{i+1}']['start_frame'],shotlist[f'{i+1}']['end_frame']):
-                camLocX.add_key(unreal.FrameNumber(x),loc[0][x] + offSetVec[0])
-                camLocY.add_key(unreal.FrameNumber(x),loc[1][x] + offSetVec[1])
-                camLocZ.add_key(unreal.FrameNumber(x),loc[2][x] + offSetVec[2])
+                camLocX.add_key(unreal.FrameNumber(x),bodies[f'{currActor}']['head_loc_x'][x] + offSetVec[0])
+                camLocY.add_key(unreal.FrameNumber(x),bodies[f'{currActor}']['head_loc_y'][x] + offSetVec[1])
+                camLocZ.add_key(unreal.FrameNumber(x),bodies[f'{currActor}']['head_loc_z'][currentpos] + offSetVec[2])
 
         else:
             cam = unreal.EditorLevelLibrary().spawn_actor_from_object(cam,circleSpawn(shotlist[f'{i+1}']['shot_type'],center),unreal.Rotator(0,0,0),False)
@@ -182,7 +243,7 @@ def edit(shotlist,loc,sequencer):
         
         trackingSettings = unreal.CameraLookatTrackingSettings()
         trackingSettings.set_editor_property('enable_look_at_tracking',True)
-        trackingSettings.set_editor_property('actor_to_track', attach_cube)
+        trackingSettings.set_editor_property('actor_to_track', bodies[f'{currActor}']['attatch_cube'])
         trackingSettings.set_editor_property('look_at_tracking_interp_speed',25)
         cam.lookat_tracking_settings = trackingSettings
 
@@ -192,33 +253,22 @@ def edit(shotlist,loc,sequencer):
         fb.set_editor_property('sensor_width',12.52)
         fb.set_editor_property('sensor_height',7.58)
 
-headx,heady,headz = get_keyframes(head_loc)
+#headx,heady,headz = get_keyframes(head_loc)
 #lhandx,lhandy,lhandz = get_keyframes(lhand_loc)
 #rhandx,rhandy,rhandz = get_keyframes(rhand_loc)
 
-headLoc =[headx,heady,headz]
+#headLoc =[headx,heady,headz]
 #lHandLoc = [lhandx,lhandy,lhandz]
 #rHandLoc = [rhandx,rhandy,rhandz]
 
-
+bodies = setup()
 def createFirstSeq():
-    newAnims = getAnimSections()
+    newAnims = getAnimSections(bodies)
     action_list = f"'{newAnims}'"
+    print(action_list)
     shot_list = generate_shotlist(action_list)
-    edit(shot_list,headLoc,main_sequencer)
+    edit(shot_list,bodies,main_sequencer)
     return shot_list
-
-def locTest():
-        currentpos= shotlist[f'{1}']['end_frame']
-        center = (headLoc[0][currentpos],headLoc[1][currentpos],headLoc[2][currentpos])
-        print(center)
-
-def csTest(amt):
-    pos = (headLoc[0][1],headLoc[1][1],headLoc[2][1])
-
-    for x in range(amt):
-        camPos = circleSpawn('CU',pos)
-        unreal.EditorLevelLibrary.spawn_actor_from_object(unreal.CineCameraActor(),camPos,unreal.Rotator(0,0,0),transient=False)
 
 def widgetUpdate(shotlist):
     shot_counts={
@@ -234,15 +284,14 @@ def widgetUpdate(shotlist):
         if shottype in shot_counts:
             shot_counts[shottype] +=1
 
-    print(shot_counts)  
 
 def generateVersions(amt):
     for x in range(amt):
         dupe_seq = unreal.EditorAssetLibrary().duplicate_asset(
-            source_asset_path='/Game/chatgptSeqs/dupes/dupe2',
+            source_asset_path='/Game/chatgptSeqs/dupes/dupe3',
             destination_asset_path=f'/Game/chatgptSeqs/dupes/toRender/var{x}'
         )
-        edit(shotlist,headLoc,dupe_seq)
+        edit(shotlist,bodies,dupe_seq)
 
 def parseShotList(data):
     for i in range(len(data)):
