@@ -95,13 +95,15 @@ def getAnimSections(bodies):
 
     for key,val in bodies.items():
         for s in val['anim_section']:
-            anims = dict(actor=val['body_instance'].get_name(), action=s.params.animation.get_name(),action_start=s.get_start_frame(),action_end=s.get_end_frame())
+            anims = dict(actor=val['body_instance'].get_name(), 
+                         action=s.params.animation.get_name(),
+                         action_start=s.get_start_frame(),
+                         action_end=s.get_end_frame())
             sections.append(anims)
     cleanSecs = cleanupSections(sections)
     return cleanSecs
 
 def cleanupSections(sections):
-    #start_time_bins = {}
     cleanedSec = []
     sections_copy = sections.copy()
     for i, item1 in enumerate(sections_copy):
@@ -113,26 +115,6 @@ def cleanupSections(sections):
                         if item1 not in cleanedSec and item2 not in cleanedSec:
                             cleanedSec.append(choice)
     
-
-    #print(f'item one: {item1}, item two {item2}')
-    # No duplicates found, return False
-
-    #     start_bin_num = start_time // 10
-    #     for bin_num in range(start_bin_num-5,start_bin_num+5):
-    #         if bin_num in start_time_bins:
-    #             for other_item in start_time_bins[bin_num]:
-    #                 if abs(start_time - other_item['action_start']) < 10:
-    #                     # Found a duplicate, randomly choose which one to remove
-    #                     chosen_item = random.choice([item, other_item])
-    #                     print(chosen_item)
-    #                     break
-    #             else:
-    #                 # No duplicate found, add item to bin
-    #                 start_time_bins[bin_num].append(item)
-    #         else:
-    #             # Bin doesn't exist yet, create it and add item
-    #             start_time_bins[bin_num] = [item]
-    # #print(sections)
     return cleanedSec
 
 def circleSpawn(shottype,center):
@@ -262,6 +244,9 @@ def edit(shotlist,bodies,sequencer):
 #rHandLoc = [rhandx,rhandy,rhandz]
 
 bodies = setup()
+def bodiestest():
+    print(bodies['KBody']['head_loc_x'][928],bodies['KBody']['head_loc_y'][928],bodies['KBody']['head_loc_z'][928])
+
 def createFirstSeq():
     newAnims = getAnimSections(bodies)
     action_list = f"'{newAnims}'"
